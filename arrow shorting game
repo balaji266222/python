@@ -1,11 +1,12 @@
 import pygame
 import random
+import math
 
 pygame.init()
 
 WIDTH, HEIGHT = 900, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Element Clash - Solo Mode")
+pygame.display.set_caption("Element Clash - No Movement Mode")
 
 clock = pygame.time.Clock()
 FPS = 60
@@ -18,29 +19,44 @@ ELEMENT_COLORS = {
     "Grass": (34, 139, 34),
     "Wind": (135, 206, 250),
 }
+font = pygame.font.SysFont(None, 35)
 
-font = pygame.font.SysFont(None, 40)
-
-arrow_speed = 7
-player_arrow = {"x": 100, "y": HEIGHT // 2, "active": False, "element": ""}
-enemy_arrow = {"x": WIDTH - 100, "y": HEIGHT // 2, "active": False, "element": ""}
-
+player = {"x": WIDTH // 2, "y": HEIGHT - 50, "element": "Fire", "shield": 3, "alive": True}
 player_score = 0
 enemy_score = 0
 result_text = ""
 
-def determine_winner(p, e):
-    if p == e or "Wind" in (p, e):
-        return "Draw"
-    rules = {"Fire": "Grass", "Water": "Fire", "Grass": "Water"}
-    return "Player" if rules[p] == e else "Enemy"
+arrow_speed = 6
+player_arrow = None
+enemy_arrow = None
+attack_phase = False
+arrow_in_flight = None
 
 def random_element():
     return random.choice(["Fire", "Water", "Grass", "Wind"])
 
 def draw_text(text, x, y, color=BLACK):
-    label = font.render(text, True, color)
-    screen.blit(label, (x, y))
+    screen.blit(font.render(text, True, color), (x, y))
+
+def determine_winner(el1, el2):
+    if el1 == el2 or "Wind" in (el1, el2):
+        return "Draw"
+    rules = {"Fire": "Grass", "Water": "Fire", "Grass": "Water"}
+    return "Player" if rules[el1] == el2 else "Enemy"
+
+def move_arrow(arrow):
+    dx = arrow["tx"] - arrow["x"]
+    dy = arrow["ty"] - arrow["y"]
+    dist = math.hypot(dx, dy)
+    if dist == 0:
+        return
+    dx /= dist
+    dy /= dist
+    arrow["x"] += dx * arrow_speed
+    arrow["y"] += dy * arrow_speed
+
+def check_hit(arrow, target_x, target_y, size=30):
+    return abs(arrow["x"] - target_x) < size and abs(arrow["y"] - target_y) < size
 
 running = True
 while running:
@@ -50,55 +66,97 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
-        if event.type == pygame.KEYDOWN and not player_arrow["active"]:
-            keys_to_elements = {
-                pygame.K_1: "Fire",
-                pygame.K_2: "Water",
-                pygame.K_3: "Grass",
-                pygame.K_4: "Wind"
-            }
-            if event.key in keys_to_elements:
-                player_arrow["element"] = keys_to_elements[event.key]
-                player_arrow["active"] = True
-                player_arrow["x"] = 100
+        if not attack_phase:
+            if event.type == pygame.KEYDOWN:
+                keys_to_elements = {
+                    pygame.K_1: "Fire",
+                    pygame.K_2: "Water",
+                    pygame.K_3: "Grass",
+                    pygame.K_4: "Wind"
+                }
+                if event.key in keys_to_elements:
+                    player["element"] = keys_to_elements[event.key]
+                if event.key == pygame.K_s:
+                    player_arrow = {
+                        "x": player["x"] + 10,
+                        "y": player["y"],
+                        "tx": WIDTH // 2,
+                        "ty": HEIGHT // 2,
+                        "element": player["element"]
+                    }
+                    enemy_arrow = {
+                        "x": WIDTH // 2,
+                        "y": 0,
+                        "tx": WIDTH // 2,
+                        "ty": HEIGHT // 2,
+                        "element": random_element()
+                    }
+                    result_text = ""
+                    attack_phase = True
 
-                enemy_arrow["element"] = random_element()
-                enemy_arrow["active"] = True
-                enemy_arrow["x"] = WIDTH - 100
+    if attack_phase:
+        if player_arrow and enemy_arrow:
+            move_arrow(player_arrow)
+            move_arrow(enemy_arrow)
+            pygame.draw.rect(screen, ELEMENT_COLORS[player_arrow["element"]], (player_arrow["x"], player_arrow["y"], 20, 5))
+            pygame.draw.rect(screen, ELEMENT_COLORS[enemy_arrow["element"]], (enemy_arrow["x"], enemy_arrow["y"], 20, 5))
+            if check_hit(player_arrow, WIDTH // 2, HEIGHT // 2) and check_hit(enemy_arrow, WIDTH // 2, HEIGHT // 2):
+                winner = determine_winner(player_arrow["element"], enemy_arrow["element"])
+                if winner == "Player":
+                    arrow_in_flight = {
+                        "x": WIDTH // 2,
+                        "y": HEIGHT // 2,
+                        "tx": 0,
+                        "ty": 0,
+                        "element": player_arrow["element"],
+                        "target": "enemy"
+                    }
+                    result_text = "✅ You won the clash!"
+                    player_score += 1
+                elif winner == "Enemy":
+                    arrow_in_flight = {
+                        "x": WIDTH // 2,
+                        "y": HEIGHT // 2,
+                        "tx": player["x"],
+                        "ty": player["y"],
+                        "element": enemy_arrow["element"],
+                        "target": "player"
+                    }
+                    result_text = "❌ Enemy won the clash!"
+                    enemy_score += 1
+                else:
+                    result_text = "🤝 It's a draw!"
+                player_arrow = None
+                enemy_arrow = None
 
-    if player_arrow["active"]:
-        player_arrow["x"] += arrow_speed
-    if enemy_arrow["active"]:
-        enemy_arrow["x"] -= arrow_speed
-
-    if player_arrow["active"]:
-        pygame.draw.rect(screen, ELEMENT_COLORS[player_arrow["element"]],
-                         (player_arrow["x"], player_arrow["y"], 40, 5))
-        draw_text(player_arrow["element"], player_arrow["x"] - 10, player_arrow["y"] - 30)
-
-    if enemy_arrow["active"]:
-        pygame.draw.rect(screen, ELEMENT_COLORS[enemy_arrow["element"]],
-                         (enemy_arrow["x"], enemy_arrow["y"], 40, 5))
-        draw_text(enemy_arrow["element"], enemy_arrow["x"] - 10, enemy_arrow["y"] - 30)
-
-    if player_arrow["active"] and enemy_arrow["active"]:
-        if abs(player_arrow["x"] - enemy_arrow["x"]) < 40:
-            winner = determine_winner(player_arrow["element"], enemy_arrow["element"])
-            if winner == "Player":
-                player_score += 1
-                result_text = "✅ You Win the Clash!"
-            elif winner == "Enemy":
-                enemy_score += 1
-                result_text = "❌ Enemy Wins the Clash!"
+        elif arrow_in_flight:
+            move_arrow(arrow_in_flight)
+            pygame.draw.rect(screen, ELEMENT_COLORS[arrow_in_flight["element"]],
+                             (arrow_in_flight["x"], arrow_in_flight["y"], 20, 5))
+            if arrow_in_flight["target"] == "player":
+                keys = pygame.key.get_pressed()
+                if check_hit(arrow_in_flight, player["x"], player["y"]):
+                    if keys[pygame.K_SPACE] and player["shield"] > 0:
+                        player["shield"] -= 1
+                        result_text += " 🛡 Shield used!"
+                    else:
+                        result_text += " 💥 You got hit!"
+                        player["alive"] = False
+                    arrow_in_flight = None
+                    attack_phase = False
             else:
-                result_text = "🤝 It's a Draw!"
-            player_arrow["active"] = False
-            enemy_arrow["active"] = False
+                if arrow_in_flight["x"] < 0 or arrow_in_flight["y"] < 0:
+                    arrow_in_flight = None
+                    attack_phase = False
+        else:
+            attack_phase = False
 
-    draw_text("Choose Element: 1-Fire 2-Water 3-Grass 4-Wind", 200, 20)
-    draw_text(f"Your Score: {player_score}", 20, 60)
-    draw_text(f"Enemy Score: {enemy_score}", WIDTH - 230, 60)
-    draw_text(result_text, WIDTH // 2 - 150, 100)
+    pygame.draw.rect(screen, ELEMENT_COLORS[player["element"]], (player["x"], player["y"], 20, 20))
+    draw_text("Choose: 1-Fire 2-Water 3-Grass 4-Wind | S = Shoot | SPACE = Shield", 100, 10)
+    draw_text(f"Shields: {player['shield']}", 20, 50)
+    draw_text(f"Your Score: {player_score}", 20, 90)
+    draw_text(f"Enemy Score: {enemy_score}", WIDTH - 220, 90)
+    draw_text(result_text, WIDTH // 2 - 150, 140)
 
     pygame.display.flip()
     clock.tick(FPS)
