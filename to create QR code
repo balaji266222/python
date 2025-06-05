@@ -8,5 +8,5 @@ r = qrcode.QRCode(
 )
 r.add_data(t)
 r.make(fit=True)
-img = r.make_image(fill_color="blue", back_color="red")
+img = r.make_image(fill_color="black", back_color="white")
 img.show()
