@@ -1,0 +1,12 @@
+import qrcode
+t = "i am balaji"
+r = qrcode.QRCode(
+    version=1,  # controls the size of the QR Code
+    error_correction=qrcode.constants.ERROR_CORRECT_L,
+    box_size=10,
+    border=4,
+)
+r.add_data(t)
+r.make(fit=True)
+img = r.make_image(fill_color="blue", back_color="red")
+img.show()
